@@ -7,11 +7,9 @@ import com.auth0.jwt.interfaces.Claim;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,28 +22,25 @@ public class JwtAuthentication implements Authentication {
     private final AppUserService appUserService;
     private final String jwtSecret;
 
-    private Map<String, Claim> getJwtClaims() {
+    private Optional<Map<String, Claim>> getJwtClaims() {
         DecodedJWT decodedJWT;
         try {
             Algorithm algorithm = Algorithm.HMAC512(jwtSecret);
             JWTVerifier verifier = JWT.require(algorithm).build();
             decodedJWT = verifier.verify(jwtToken);
-            return decodedJWT.getClaims();
+            return Optional.of(decodedJWT.getClaims());
         } catch (JWTVerificationException exception){
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+            return Optional.empty();
         }
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        Optional<AppUser> appUser = appUserService
-            .findUserById(getJwtClaims().get("id").asString());
-
-        if (appUser.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        }
-
-        return List.of(new SimpleGrantedAuthority(appUser.get().getRole()));
+        return getJwtClaims().flatMap(
+            claims -> appUserService.findUserById(claims.get("id").asString())
+        ).map(
+            appUser -> List.of(new SimpleGrantedAuthority(appUser.getRole()))
+        ).orElse(List.of());
     }
 
     @Override
@@ -55,22 +50,21 @@ public class JwtAuthentication implements Authentication {
 
     @Override
     public Object getDetails() {
-        return appUserService.findUserById(getJwtClaims().get("id").asString());
+        return getJwtClaims().map(
+            claims -> appUserService.findUserById(claims.get("id").asString())
+        ).orElse(null);
     }
 
     @Override
     public Object getPrincipal() {
-        return appUserService.findUserById(getJwtClaims().get("id").asString());
+        return getJwtClaims().map(
+            claims -> appUserService.findUserById(claims.get("id").asString())
+        ).orElse(null);
     }
 
     @Override
     public boolean isAuthenticated() {
-        try {
-            getJwtClaims();
-            return true;
-        } catch (ResponseStatusException e) {
-            return false;
-        }
+        return getJwtClaims().isPresent();
     }
 
     @Override
@@ -79,6 +73,8 @@ public class JwtAuthentication implements Authentication {
 
     @Override
     public String getName() {
-        return getJwtClaims().get("username").asString();
+        return getJwtClaims()
+            .map(claims -> claims.get("username").asString())
+            .orElse(null);
     }
 }

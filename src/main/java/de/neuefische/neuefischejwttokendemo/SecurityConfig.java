@@ -39,7 +39,7 @@ public class SecurityConfig {
             .addFilterBefore(new OncePerRequestFilter() {
                 @Override
                 protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-                    String jwtToken = Optional.of(
+                    String jwtToken = Optional.ofNullable(
                         request.getHeader("Authorization")
                     ).orElse("")
                     .replaceFirst("Bearer ", "");
@@ -58,13 +58,11 @@ public class SecurityConfig {
                 }
             }, UsernamePasswordAuthenticationFilter.class)
 
-            .authorizeRequests()
-            .and()
-            .authorizeRequests()
+            .authorizeHttpRequests()
             .antMatchers(
                 HttpMethod.POST,
                 "/api/app-users",
-                    "/api/login"
+                "/api/login"
             ).permitAll()
             .anyRequest()
             .authenticated()
